@@ -3,6 +3,43 @@
 ## Objectif
 Mettre en place un circuit avec deux LEDs (rouge et verte) contrôlables via des commandes envoyées depuis l'interface tactile sur le port série.
 
+## Demo complète (écran + toutes LEDs + boutons + potentiomètre)
+
+Une version complète est maintenant disponible avec:
+
+- `demo_leds_boutons_pot.ino` (ESP32/LilyGO)
+- `touch_ui_demo.py` (interface tactile Raspberry Pi)
+- `launch_demo.sh` (script de lancement TTY1)
+
+### Mapping matériel utilisé
+
+- LEDs: BLEU=`GPIO19`, VERT=`GPIO23`, JAUNE=`GPIO21`, ROUGE=`GPIO22`
+- Bouton mode: `GPIO18` (appui = LOW, `INPUT_PULLUP`)
+- Bouton action: `GPIO39` (appui = LOW, entrée seulement)
+- Potentiomètre: `GPIO36` (ADC)
+
+### Compilation / téléversement de la version complète
+
+```bash
+cd ~/243-4J5-LI/labo/Labo-01/led-control
+arduino-cli compile --fqbn esp32:esp32:esp32 demo_leds_boutons_pot.ino
+arduino-cli upload -p /dev/ttyACM0 --fqbn esp32:esp32:esp32 demo_leds_boutons_pot.ino
+```
+
+### Lancement de l'interface tactile
+
+```bash
+cd ~/243-4J5-LI/labo/Labo-01/led-control
+sudo ./launch_demo.sh
+```
+
+### Contrôles disponibles dans l'UI
+
+- `MODE -` / `MODE +` : change le mode d'animation
+- `PAUSE/RESUME` : stop/reprend l'animation
+- `STATUS` : lit l'état (`mode`, `pot`, `stepMs`, `run`)
+- `QUIT` (ou touche `q`) : ferme l'interface
+
 ## Architecture du système
 
 ```
