@@ -74,7 +74,13 @@ enum GameState : uint8_t {
   STATE_GAME_OVER
 };
 
+enum InputMode : uint8_t {
+  INPUT_POT = 0,
+  INPUT_BUTTONS
+};
+
 GameState gameState = STATE_WAIT_START;
+InputMode inputMode = INPUT_POT;
 int score = 0;
 int roundIndex = 0;
 int targetDir = 0; // 0:X+, 1:X-, 2:Y+, 3:Y-
@@ -98,12 +104,17 @@ int actionButtonStable = HIGH;
 unsigned long modeButtonLastChangeMs = 0;
 unsigned long actionButtonLastChangeMs = 0;
 
+const unsigned long BUTTON_DIFF_LEVELS_MS[] = {2400, 1600, 900};
+const int BUTTON_DIFF_LEVEL_COUNT = sizeof(BUTTON_DIFF_LEVELS_MS) / sizeof(BUTTON_DIFF_LEVELS_MS[0]);
+int buttonDifficultyLevel = 1; // 0=facile, 1=normal, 2=difficile
+
 char commandBuffer[32];
 int commandLength = 0;
 
 void startGame();
 void onActionPressed();
 void printStatusLine(unsigned long now);
+void toggleInputMode();
 
 // -------------------- UTILS --------------------
 const char* sensorName(SensorType s) {
@@ -130,6 +141,14 @@ const char* gameStateName(GameState s) {
     case STATE_PLAYING: return "PLAY";
     case STATE_ROUND_FEEDBACK: return "FEEDBACK";
     case STATE_GAME_OVER: return "GAMEOVER";
+    default: return "UNKNOWN";
+  }
+}
+
+const char* inputModeName(InputMode m) {
+  switch (m) {
+    case INPUT_POT: return "POT";
+    case INPUT_BUTTONS: return "BUTTONS";
     default: return "UNKNOWN";
   }
 }
@@ -326,6 +345,12 @@ void finishGame() {
   showScoreBar(score);
 }
 
+void toggleInputMode() {
+  inputMode = (inputMode == INPUT_POT) ? INPUT_BUTTONS : INPUT_POT;
+  Serial.print("Mode entree -> ");
+  Serial.println(inputModeName(inputMode));
+}
+
 void printStatusLine(unsigned long now) {
   unsigned long remMs = 0;
   if (gameState == STATE_PLAYING) {
@@ -343,6 +368,8 @@ void printStatusLine(unsigned long now) {
   Serial.print(MAX_ROUNDS);
   Serial.print(" target=");
   Serial.print(dirName(targetDir));
+  Serial.print(" input=");
+  Serial.print(inputModeName(inputMode));
   Serial.print(" pot=");
   Serial.print(potRaw);
   Serial.print(" roundMs=");
@@ -359,7 +386,18 @@ void printStatusLine(unsigned long now) {
 }
 
 void onModePressed() {
-  // Start ou reset partie
+  if (inputMode == INPUT_BUTTONS) {
+    buttonDifficultyLevel = (buttonDifficultyLevel + 1) % BUTTON_DIFF_LEVEL_COUNT;
+    roundDurationMs = BUTTON_DIFF_LEVELS_MS[buttonDifficultyLevel];
+    Serial.print("Difficulte boutons -> ");
+    Serial.print(buttonDifficultyLevel);
+    Serial.print(" (");
+    Serial.print(roundDurationMs);
+    Serial.println(" ms)");
+    return;
+  }
+
+  // En mode pot, bouton MODE garde le role start/reset
   startGame();
 }
 
@@ -394,6 +432,11 @@ void onActionPressed() {
 void handleSerialCommand(char* cmd) {
   if (strcmp(cmd, "START") == 0 || strcmp(cmd, "RESET") == 0 || strcmp(cmd, "MODE") == 0) {
     startGame();
+    return;
+  }
+
+  if (strcmp(cmd, "MODE_INPUT") == 0 || strcmp(cmd, "TOGGLE_INPUT") == 0) {
+    toggleInputMode();
     return;
   }
 
@@ -488,6 +531,7 @@ void setup() {
   Serial.println("=== JEU REFLEXE + EQUILIBRE ===");
   Serial.println("Mode=Start/Reset | Action=Valider orientation");
   Serial.println("Potentiometre: ajuste temps de manche (difficulte)");
+  Serial.println("Mode entree initial: POT");
 
   if (detectAccelerometer()) {
     Serial.print("Accelerometre detecte: ");
@@ -530,8 +574,12 @@ void loop() {
   if ((now - lastSampleMs) >= SAMPLE_PERIOD_MS) {
     lastSampleMs = now;
     potRaw = analogRead(POT_PIN);
-    // pot haut => plus difficile (moins de temps)
-    roundDurationMs = map(potRaw, 0, 4095, ROUND_TIME_MAX_MS, ROUND_TIME_MIN_MS);
+    if (inputMode == INPUT_POT) {
+      // pot haut => plus difficile (moins de temps)
+      roundDurationMs = map(potRaw, 0, 4095, ROUND_TIME_MAX_MS, ROUND_TIME_MIN_MS);
+    } else {
+      roundDurationMs = BUTTON_DIFF_LEVELS_MS[buttonDifficultyLevel];
+    }
 
     if (detectedSensor == SENSOR_NONE) {
       detectAccelerometer();

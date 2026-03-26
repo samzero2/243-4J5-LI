@@ -88,6 +88,7 @@ class GameUI:
         self.round_ms = "0"
         self.rem_ms = "0"
         self.accel = "0,0,0"
+        self.input_mode = "POT"
 
         self._connect_serial()
 
@@ -132,18 +133,21 @@ class GameUI:
         config = [
             ("START/RESET", left_x, start_y, 3),
             ("VALIDER", right_x, start_y, 1),
-            ("STATUS", left_x, start_y + 4, 2),
-            ("QUIT", right_x, start_y + 4, 4),
+            ("MODE ENTREE", left_x, start_y + 4, 2),
+            ("STATUS", right_x, start_y + 4, 2),
+            ("QUIT", left_x, start_y + 8, 4),
         ]
 
         for label, col, row, color in config:
+            width = btn_w if label != "QUIT" else (w - 2)
+            col_final = col if label != "QUIT" else 1
             self.buttons.append(
                 {
                     "label": label,
                     "row": row,
-                    "col": col,
+                    "col": col_final,
                     "height": btn_h,
-                    "width": btn_w,
+                    "width": width,
                     "color": color,
                     "active": False,
                 }
@@ -175,6 +179,7 @@ class GameUI:
         self.game_state = data.get("stateName", self.game_state)
         self.score = data.get("score", self.score)
         self.target = data.get("target", self.target)
+        self.input_mode = data.get("input", self.input_mode)
         self.pot = data.get("pot", self.pot)
         self.round_ms = data.get("roundMs", self.round_ms)
         self.rem_ms = data.get("remMs", self.rem_ms)
@@ -202,7 +207,7 @@ class GameUI:
         self.stdscr.attroff(curses.A_BOLD)
 
         info_l1 = f"Etat: {self.game_state} | Score: {self.score} | Cible: {self.target}"
-        info_l2 = f"Temps restant: {self.rem_ms} ms | Fenetre: {self.round_ms} ms | Pot: {self.pot}"
+        info_l2 = f"Temps restant: {self.rem_ms} ms | Fenetre: {self.round_ms} ms | Entree: {self.input_mode}"
         info_l3 = f"Accel: {self.accel}"
         self.stdscr.addstr(1, 1, info_l1[: w - 2], curses.A_BOLD)
         self.stdscr.addstr(2, 1, info_l2[: w - 2])
@@ -254,6 +259,8 @@ class GameUI:
             self._send_command("START")
         elif label == "VALIDER":
             self._send_command("ACTION")
+        elif label == "MODE ENTREE":
+            self._send_command("MODE_INPUT")
         elif label == "STATUS":
             self._send_command("STATUS")
         elif label == "QUIT":
@@ -289,6 +296,8 @@ class GameUI:
                 self._handle_action("START/RESET")
             elif ch == ord("v"):
                 self._handle_action("VALIDER")
+            elif ch == ord("m"):
+                self._handle_action("MODE ENTREE")
             elif ch == ord("t"):
                 self._handle_action("STATUS")
 
