@@ -98,6 +98,13 @@ int actionButtonStable = HIGH;
 unsigned long modeButtonLastChangeMs = 0;
 unsigned long actionButtonLastChangeMs = 0;
 
+char commandBuffer[32];
+int commandLength = 0;
+
+void startGame();
+void onActionPressed();
+void printStatusLine(unsigned long now);
+
 // -------------------- UTILS --------------------
 const char* sensorName(SensorType s) {
   switch (s) {
@@ -114,6 +121,16 @@ const char* dirName(int d) {
     case 1: return "X-";
     case 2: return "Y+";
     default: return "Y-";
+  }
+}
+
+const char* gameStateName(GameState s) {
+  switch (s) {
+    case STATE_WAIT_START: return "WAIT";
+    case STATE_PLAYING: return "PLAY";
+    case STATE_ROUND_FEEDBACK: return "FEEDBACK";
+    case STATE_GAME_OVER: return "GAMEOVER";
+    default: return "UNKNOWN";
   }
 }
 
@@ -309,6 +326,38 @@ void finishGame() {
   showScoreBar(score);
 }
 
+void printStatusLine(unsigned long now) {
+  unsigned long remMs = 0;
+  if (gameState == STATE_PLAYING) {
+    const unsigned long elapsed = now - roundStartMs;
+    remMs = (elapsed < roundDurationMs) ? (roundDurationMs - elapsed) : 0;
+  }
+
+  Serial.print("state=");
+  Serial.print((int)gameState);
+  Serial.print(" stateName=");
+  Serial.print(gameStateName(gameState));
+  Serial.print(" score=");
+  Serial.print(score);
+  Serial.print("/");
+  Serial.print(MAX_ROUNDS);
+  Serial.print(" target=");
+  Serial.print(dirName(targetDir));
+  Serial.print(" pot=");
+  Serial.print(potRaw);
+  Serial.print(" roundMs=");
+  Serial.print(roundDurationMs);
+  Serial.print(" remMs=");
+  Serial.print(remMs);
+  Serial.print(" accel=(");
+  Serial.print(ax, 2);
+  Serial.print(",");
+  Serial.print(ay, 2);
+  Serial.print(",");
+  Serial.print(az, 2);
+  Serial.println(")");
+}
+
 void onModePressed() {
   // Start ou reset partie
   startGame();
@@ -340,6 +389,56 @@ void onActionPressed() {
   Serial.print(currentDir >= 0 ? dirName(currentDir) : "NONE");
   Serial.print(" -> ");
   Serial.println(success ? "OK" : "ECHEC");
+}
+
+void handleSerialCommand(char* cmd) {
+  if (strcmp(cmd, "START") == 0 || strcmp(cmd, "RESET") == 0 || strcmp(cmd, "MODE") == 0) {
+    startGame();
+    return;
+  }
+
+  if (strcmp(cmd, "ACTION") == 0 || strcmp(cmd, "VALIDATE") == 0) {
+    onActionPressed();
+    return;
+  }
+
+  if (strcmp(cmd, "STATUS") == 0) {
+    printStatusLine(millis());
+    return;
+  }
+
+  if (strcmp(cmd, "PING") == 0) {
+    Serial.println("PONG");
+    return;
+  }
+
+  Serial.print("ERR commande inconnue: ");
+  Serial.println(cmd);
+}
+
+void processSerialCommands() {
+  while (Serial.available() > 0) {
+    char c = (char)Serial.read();
+    if (c == '\n' || c == '\r') {
+      if (commandLength > 0) {
+        commandBuffer[commandLength] = '\0';
+        handleSerialCommand(commandBuffer);
+        commandLength = 0;
+      }
+      continue;
+    }
+
+    if (commandLength >= ((int)sizeof(commandBuffer) - 1)) {
+      commandLength = 0;
+      Serial.println("ERR commande trop longue");
+      continue;
+    }
+
+    if (c >= 'a' && c <= 'z') {
+      c = (char)(c - ('a' - 'A'));
+    }
+    commandBuffer[commandLength++] = c;
+  }
 }
 
 void handleDebouncedButton(
@@ -410,6 +509,7 @@ void setup() {
 
 void loop() {
   unsigned long now = millis();
+  processSerialCommands();
 
   handleDebouncedButton(
       BUTTON_MODE_PIN,
@@ -480,25 +580,7 @@ void loop() {
 
   if ((now - lastStatusMs) >= 1000) {
     lastStatusMs = now;
-    Serial.print("state=");
-    Serial.print((int)gameState);
-    Serial.print(" score=");
-    Serial.print(score);
-    Serial.print("/");
-    Serial.print(MAX_ROUNDS);
-    Serial.print(" target=");
-    Serial.print(dirName(targetDir));
-    Serial.print(" pot=");
-    Serial.print(potRaw);
-    Serial.print(" roundMs=");
-    Serial.print(roundDurationMs);
-    Serial.print(" accel=(");
-    Serial.print(ax, 2);
-    Serial.print(",");
-    Serial.print(ay, 2);
-    Serial.print(",");
-    Serial.print(az, 2);
-    Serial.println(")");
+    printStatusLine(now);
   }
 
   delay(5);
